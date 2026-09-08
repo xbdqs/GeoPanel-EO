@@ -1,0 +1,54 @@
+project:
+  project_id: T05
+  title: 'Monthly accumulated depths 1..12: annual sum=78'
+  output_directory: outputs
+units:
+  source: units.geojson
+  entity_id_field: entity_id
+sources:
+- source_id: raster
+  type: geotiff
+  paths:
+  - climate_01.tif
+  - climate_02.tif
+  - climate_03.tif
+  - climate_04.tif
+  - climate_05.tif
+  - climate_06.tif
+  - climate_07.tif
+  - climate_08.tif
+  - climate_09.tif
+  - climate_10.tif
+  - climate_11.tif
+  - climate_12.tif
+  timestamps:
+  - '2020-01-01'
+  - '2020-02-01'
+  - '2020-03-01'
+  - '2020-04-01'
+  - '2020-05-01'
+  - '2020-06-01'
+  - '2020-07-01'
+  - '2020-08-01'
+  - '2020-09-01'
+  - '2020-10-01'
+  - '2020-11-01'
+  - '2020-12-01'
+variables:
+- variable_id: precipitation
+  source_id: raster
+  source_variable: band_1
+  semantic_type: accumulation_depth
+  unit: mm
+  temporal_support: monthly_total
+  spatial_reducer: coverage_weighted_mean
+  temporal_reducer: sum
+  temporal_window:
+    frequency: annual
+  minimum_coverage: 0
+outputs:
+  csv: true
+  parquet: true
+  stata: true
+  wide_csv: true
+  quality_report_html: true

@@ -1,0 +1,31 @@
+project:
+  project_id: T05
+  title: 'Monthly accumulated depths 1..12: annual sum=78'
+  output_directory: outputs
+units:
+  source: units.geojson
+  entity_id_field: entity_id
+sources:
+- source_id: raster
+  type: netcdf
+  path: climate.nc
+  x_coordinate: x
+  y_coordinate: y
+variables:
+- variable_id: precipitation
+  source_id: raster
+  source_variable: climate
+  semantic_type: accumulation_depth
+  unit: mm
+  temporal_support: monthly_total
+  spatial_reducer: coverage_weighted_mean
+  temporal_reducer: sum
+  temporal_window:
+    frequency: annual
+  minimum_coverage: 0
+outputs:
+  csv: true
+  parquet: true
+  stata: true
+  wide_csv: true
+  quality_report_html: true

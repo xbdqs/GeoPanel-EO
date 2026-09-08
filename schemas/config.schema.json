@@ -1,0 +1,601 @@
+{
+  "$defs": {
+    "Outputs": {
+      "additionalProperties": false,
+      "properties": {
+        "csv": {
+          "const": true,
+          "default": true,
+          "title": "Csv",
+          "type": "boolean"
+        },
+        "parquet": {
+          "default": true,
+          "title": "Parquet",
+          "type": "boolean"
+        },
+        "stata": {
+          "default": true,
+          "title": "Stata",
+          "type": "boolean"
+        },
+        "wide_csv": {
+          "default": false,
+          "title": "Wide Csv",
+          "type": "boolean"
+        },
+        "quality_report_html": {
+          "default": true,
+          "title": "Quality Report Html",
+          "type": "boolean"
+        },
+        "hash_algorithm": {
+          "const": "sha256",
+          "default": "sha256",
+          "title": "Hash Algorithm",
+          "type": "string"
+        }
+      },
+      "title": "Outputs",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "require_unique_entity_time": {
+          "const": true,
+          "default": true,
+          "title": "Require Unique Entity Time",
+          "type": "boolean"
+        },
+        "require_balanced": {
+          "default": false,
+          "title": "Require Balanced",
+          "type": "boolean"
+        },
+        "retain_flagged_rows": {
+          "const": true,
+          "default": true,
+          "title": "Retain Flagged Rows",
+          "type": "boolean"
+        }
+      },
+      "title": "Panel",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "output_directory": {
+          "default": "outputs",
+          "title": "Output Directory",
+          "type": "string"
+        },
+        "overwrite": {
+          "const": false,
+          "default": false,
+          "title": "Overwrite",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "geotiff",
+            "netcdf"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "paths": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paths"
+        },
+        "timestamps": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamps"
+        },
+        "time_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Pattern"
+        },
+        "time_format": {
+          "default": "%Y-%m-%d",
+          "title": "Time Format",
+          "type": "string"
+        },
+        "time_coordinate": {
+          "default": "time",
+          "title": "Time Coordinate",
+          "type": "string"
+        },
+        "x_coordinate": {
+          "default": "lon",
+          "title": "X Coordinate",
+          "type": "string"
+        },
+        "y_coordinate": {
+          "default": "lat",
+          "title": "Y Coordinate",
+          "type": "string"
+        },
+        "crs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crs"
+        },
+        "band": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Band",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "type"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Spatial": {
+      "additionalProperties": false,
+      "properties": {
+        "crs_action": {
+          "default": "fail",
+          "enum": [
+            "fail",
+            "reproject_units"
+          ],
+          "title": "Crs Action",
+          "type": "string"
+        },
+        "area_method": {
+          "const": "projected_equal_area",
+          "default": "projected_equal_area",
+          "title": "Area Method",
+          "type": "string"
+        }
+      },
+      "title": "Spatial",
+      "type": "object"
+    },
+    "Temporal": {
+      "additionalProperties": false,
+      "properties": {
+        "calendar": {
+          "default": "proleptic_gregorian",
+          "enum": [
+            "proleptic_gregorian",
+            "gregorian",
+            "standard"
+          ],
+          "title": "Calendar",
+          "type": "string"
+        },
+        "timezone": {
+          "const": "naive",
+          "default": "naive",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "input_frequency": {
+          "const": "monthly",
+          "default": "monthly",
+          "title": "Input Frequency",
+          "type": "string"
+        },
+        "mean_weighting": {
+          "const": "equal_month",
+          "default": "equal_month",
+          "title": "Mean Weighting",
+          "type": "string"
+        },
+        "incomplete_window": {
+          "const": "flag_and_null",
+          "default": "flag_and_null",
+          "title": "Incomplete Window",
+          "type": "string"
+        }
+      },
+      "title": "Temporal",
+      "type": "object"
+    },
+    "Uncertainty": {
+      "additionalProperties": false,
+      "properties": {
+        "assumption": {
+          "const": "independent_cells_and_times",
+          "default": "independent_cells_and_times",
+          "title": "Assumption",
+          "type": "string"
+        }
+      },
+      "title": "Uncertainty",
+      "type": "object"
+    },
+    "Units": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "layer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layer"
+        },
+        "entity_id_field": {
+          "default": "entity_id",
+          "title": "Entity Id Field",
+          "type": "string"
+        },
+        "entity_name_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Name Field"
+        },
+        "geometry_action": {
+          "const": "fail",
+          "default": "fail",
+          "title": "Geometry Action",
+          "type": "string"
+        },
+        "crs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crs"
+        },
+        "target_crs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Crs"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "Units",
+      "type": "object"
+    },
+    "Variable": {
+      "additionalProperties": false,
+      "properties": {
+        "variable_id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "title": "Variable Id",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_variable": {
+          "title": "Source Variable",
+          "type": "string"
+        },
+        "semantic_type": {
+          "enum": [
+            "intensive_state",
+            "accumulation_depth",
+            "extensive_total",
+            "categorical_class"
+          ],
+          "title": "Semantic Type",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "temporal_support": {
+          "enum": [
+            "monthly_mean",
+            "monthly_total",
+            "monthly_snapshot"
+          ],
+          "title": "Temporal Support",
+          "type": "string"
+        },
+        "spatial_reducer": {
+          "enum": [
+            "coverage_weighted_mean",
+            "coverage_adjusted_sum",
+            "area_by_class_and_fraction"
+          ],
+          "title": "Spatial Reducer",
+          "type": "string"
+        },
+        "temporal_reducer": {
+          "enum": [
+            "mean",
+            "sum",
+            "snapshot"
+          ],
+          "title": "Temporal Reducer",
+          "type": "string"
+        },
+        "temporal_window": {
+          "$ref": "#/$defs/Window"
+        },
+        "valid_range": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Range"
+        },
+        "nodata_rule": {
+          "const": "exclude",
+          "default": "exclude",
+          "title": "Nodata Rule",
+          "type": "string"
+        },
+        "minimum_coverage": {
+          "default": 0.8,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Minimum Coverage",
+          "type": "number"
+        },
+        "quality_mask": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Mask"
+        },
+        "optional_weight": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optional Weight"
+        },
+        "weight_semantics": {
+          "const": "cell_total",
+          "default": "cell_total",
+          "title": "Weight Semantics",
+          "type": "string"
+        },
+        "uncertainty_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uncertainty Source"
+        },
+        "classes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classes"
+        }
+      },
+      "required": [
+        "variable_id",
+        "source_id",
+        "source_variable",
+        "semantic_type",
+        "unit",
+        "temporal_support",
+        "spatial_reducer",
+        "temporal_reducer"
+      ],
+      "title": "Variable",
+      "type": "object"
+    },
+    "Window": {
+      "additionalProperties": false,
+      "properties": {
+        "frequency": {
+          "default": "annual",
+          "enum": [
+            "monthly",
+            "annual",
+            "quarterly"
+          ],
+          "title": "Frequency",
+          "type": "string"
+        },
+        "months": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Months",
+          "type": "array"
+        }
+      },
+      "title": "Window",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "$ref": "#/$defs/Project"
+    },
+    "units": {
+      "$ref": "#/$defs/Units"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    },
+    "variables": {
+      "items": {
+        "$ref": "#/$defs/Variable"
+      },
+      "minItems": 1,
+      "title": "Variables",
+      "type": "array"
+    },
+    "spatial": {
+      "$ref": "#/$defs/Spatial"
+    },
+    "temporal": {
+      "$ref": "#/$defs/Temporal"
+    },
+    "panel": {
+      "$ref": "#/$defs/Panel"
+    },
+    "uncertainty": {
+      "$ref": "#/$defs/Uncertainty"
+    },
+    "outputs": {
+      "$ref": "#/$defs/Outputs"
+    }
+  },
+  "required": [
+    "project",
+    "units",
+    "sources",
+    "variables"
+  ],
+  "title": "Config",
+  "type": "object"
+}

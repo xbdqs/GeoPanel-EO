@@ -1,0 +1,14 @@
+{
+  "description": "Half each of cells 10 and 20: (0.5*10+0.5*20)/1=15",
+  "expected": {
+    "temperature": {
+      "value": 15,
+      "valid_area": 1,
+      "total_unit_area": 1,
+      "contributing_cell_count": 2,
+      "effective_sample_size": 2
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

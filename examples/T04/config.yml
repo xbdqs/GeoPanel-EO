@@ -1,0 +1,32 @@
+project:
+  project_id: T04
+  title: 'Cell-total weights 1 and 3: (10*1+20*3)/4=17.5; unweighted mean=15'
+  output_directory: outputs
+units:
+  source: units.geojson
+  entity_id_field: entity_id
+sources:
+- source_id: raster
+  type: geotiff
+  path: data.tif
+  timestamps:
+  - '2020-01-01'
+variables:
+- variable_id: temperature
+  source_id: raster
+  source_variable: band_1
+  semantic_type: intensive_state
+  unit: degC
+  temporal_support: monthly_mean
+  spatial_reducer: coverage_weighted_mean
+  temporal_reducer: mean
+  temporal_window:
+    frequency: monthly
+  minimum_coverage: 0
+  optional_weight: weights.tif
+outputs:
+  csv: true
+  parquet: true
+  stata: true
+  wide_csv: true
+  quality_report_html: true

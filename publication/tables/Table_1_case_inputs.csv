@@ -1,0 +1,5 @@
+Role,Dataset,Format_resolution,Temporal_extent,GeoPanel_EO_operation
+Analysis units,Chicago community areas,Vector polygons,77,CRS normalization and geometry validation
+Climate,Daymet V4 R1,NetCDF; 1 km,2019–2020 monthly,Coverage-weighted mean; sum or mean over time
+Land cover,Annual NLCD C1.2,GeoTIFF; 30 m,2019–2020 annual,Area and fraction by declared class
+Impervious surface,Annual NLCD C1.2,GeoTIFF; 30 m,2019–2020 annual,Coverage-weighted mean

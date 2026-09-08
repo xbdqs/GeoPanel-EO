@@ -1,0 +1,12 @@
+{
+  "description": "Cell-total weights 1 and 3: (10*1+20*3)/4=17.5; unweighted mean=15",
+  "expected": {
+    "temperature": {
+      "value": 17.5,
+      "weight_sum": 2,
+      "effective_sample_size": 1.6
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

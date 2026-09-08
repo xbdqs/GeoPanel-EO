@@ -1,0 +1,35 @@
+project:
+  project_id: T07
+  title: 'Classes 1,1,2,NoData: class areas 2 and 1; classified-area fractions 2/3
+    and 1/3'
+  output_directory: outputs
+units:
+  source: units.geojson
+  entity_id_field: entity_id
+sources:
+- source_id: raster
+  type: geotiff
+  path: data.tif
+  timestamps:
+  - '2020-01-01'
+variables:
+- variable_id: landcover
+  source_id: raster
+  source_variable: band_1
+  semantic_type: categorical_class
+  unit: class_code
+  temporal_support: monthly_snapshot
+  spatial_reducer: area_by_class_and_fraction
+  temporal_reducer: snapshot
+  temporal_window:
+    frequency: monthly
+  minimum_coverage: 0
+  classes:
+  - 1
+  - 2
+outputs:
+  csv: true
+  parquet: true
+  stata: true
+  wide_csv: true
+  quality_report_html: true

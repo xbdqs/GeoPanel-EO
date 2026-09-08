@@ -1,0 +1,20 @@
+{
+  "description": "Classes 1,1,2,NoData: class areas 2 and 1; classified-area fractions 2/3 and 1/3",
+  "expected": {
+    "landcover_class_1_area": {
+      "value": 2,
+      "valid_coverage_fraction": 0.75
+    },
+    "landcover_class_1_fraction": {
+      "value": 0.6666666666666666
+    },
+    "landcover_class_2_area": {
+      "value": 1
+    },
+    "landcover_class_2_fraction": {
+      "value": 0.3333333333333333
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

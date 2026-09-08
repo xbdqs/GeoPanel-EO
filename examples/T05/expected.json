@@ -1,0 +1,12 @@
+{
+  "description": "Monthly accumulated depths 1..12: annual sum=78",
+  "expected": {
+    "precipitation": {
+      "value": 78,
+      "source_time_count": 12,
+      "expected_time_count": 12
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

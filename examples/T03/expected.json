@@ -1,0 +1,13 @@
+{
+  "description": "One half-cell is NoData: valid area 0.5, full polygon area 1",
+  "expected": {
+    "temperature": {
+      "value": 10,
+      "valid_coverage_fraction": 0.5,
+      "valid_area": 0.5,
+      "total_unit_area": 1
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

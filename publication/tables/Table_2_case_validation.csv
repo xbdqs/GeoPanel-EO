@@ -1,0 +1,8 @@
+Metric,Value,Unit
+Community units,77.0,count
+Monthly climate panel,5544.0,rows
+Annual climate panel,462.0,rows
+Annual NLCD panel,5082.0,rows
+Combined long panel,5544.0,rows
+Combined wide panel,154.0,rows
+Total workflow,110.346,seconds

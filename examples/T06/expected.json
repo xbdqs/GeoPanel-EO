@@ -1,0 +1,12 @@
+{
+  "description": "Monthly states 0..11: equal-month annual mean=5.5; temperature sum must be rejected",
+  "expected": {
+    "temperature": {
+      "value": 5.5,
+      "source_time_count": 12,
+      "expected_time_count": 12
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}

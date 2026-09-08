@@ -1,0 +1,9 @@
+.venv*/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+local_build_dist/
+local_validation_results/
+LOCAL_SETUP_LOG.txt

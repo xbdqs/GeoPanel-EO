@@ -1,0 +1,13 @@
+{
+  "description": "Four fully covered cells: (10+20+30+40)/4=25",
+  "expected": {
+    "temperature": {
+      "value": 25,
+      "valid_coverage_fraction": 1,
+      "valid_area": 4,
+      "effective_sample_size": 4
+    }
+  },
+  "absolute_tolerance": 1e-07,
+  "relative_tolerance": 1e-07
+}
