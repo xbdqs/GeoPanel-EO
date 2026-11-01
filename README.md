@@ -6,7 +6,7 @@ GeoPanel-EO converts local NetCDF and GeoTIFF Earth-observation products into au
 
 The package validates a declarative YAML contract, reads supported raster and polygon inputs, calculates exact partial-cell intersections, applies variable-specific spatial and temporal reducers, and writes analysis-ready panels together with coverage, effective sample size, quality flags, provenance and file hashes. Supported variable semantics are intensive state, accumulated depth, pixel total and categorical class.
 
-The validated core accepts rectilinear rasters in metre-based equal-area projected coordinate systems. It does not silently reproject rasters, convert physical units, repair invalid geometries or manufacture uncertainty when compatible uncertainty inputs are unavailable. These restrictions are intentional and are documented in `docs/SCIENTIFIC_CONTRACT.md`.
+The validated core accepts rectilinear rasters in metre-based equal-area projected coordinate systems. It does not silently reproject rasters, convert physical units, repair invalid geometries or manufacture uncertainty when compatible uncertainty inputs are unavailable. These restrictions are intentional and are documented in `docs/SCIENTIFIC_CONTRACT_V011.md`.
 
 ## Installation
 
@@ -39,14 +39,15 @@ geopanel-eo schema > config.schema.json
 - `examples/`: synthetic GeoTIFF and NetCDF inputs with manually specified expectations.
 - `case_studies/chicago/`: real-data configuration and citywide validation driver.
 - `publication/`: manuscript figures, tables and compact figure-source data.
-- `docs/SCIENTIFIC_CONTRACT.md`: scientific and output behavior.
-- `docs/DEPENDENCIES.md`: dependency and licensing notes.
+- `docs/DEPENDENCY_AUDIT.md`: dependency and licence audit.
+- `docs/SCIENTIFIC_CONTRACT_V011.md`: temporal, spatial-support and preprocessing contracts added in v0.1.1.
+- `review_tools/`: reviewer-oriented synthetic tests and optional real-data validation scripts (some require separately obtained Chicago source data).
 
 The Chicago case uses all 77 community areas and combines Daymet V4 R1 climate fields with Annual NLCD Collection 1.2 products for 2019–2020. Large upstream rasters are not redistributed. Their authoritative identifiers and acquisition instructions must be used to reproduce the case.
 
 ## Version and citation
 
-Version 0.1.0 follows semantic versioning and is the normalized public release of the scientifically validated 0.1.0a2 candidate. On 8 September 2026, the source tree and installed wheel each passed all 42 tests on Windows 10 with Python 3.12.14, and the installed-wheel command-line NetCDF example reproduced the locked scientific result hash. GitHub Actions repeats the test suite after every push and pull request. The tagged GitHub Release `v0.1.0` is the public record of this version.
+Version `0.1.1` extends the public `v0.1.0` release with explicit temporal support, represented-day weighting, spatial-support overlap diagnostics and SHA-256 preprocessing-manifest checks. Historical Chicago 2019–2020 panels were produced by software `0.1.0a2`; a separate November 2026 run with `0.1.1.dev2` reproduced all 5,544 archived monthly climate values and verified a retrospective input manifest at runtime. This does not claim that the 2026-09 historical run performed the new audit. Run the combined core/reviewer tests before preparing the v0.1.1 tag (`python -m pytest tests tests_review -q`). See `docs/SCIENTIFIC_CONTRACT_V011.md` and `docs/RELEASE_VALIDATION.md`.
 
 ## Licence
 

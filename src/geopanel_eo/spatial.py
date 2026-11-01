@@ -10,7 +10,7 @@ from .errors import GeoPanelError
 from .inputs import aligned_auxiliary, validate_area_crs
 
 
-def spatial_records(raster, units, variable):
+def spatial_records(raster, units, variable, support_collector=None):
     validate_area_crs(raster.crs)
     a = raster.transform
     height, width = raster.values.shape
@@ -79,6 +79,18 @@ def spatial_records(raster, units, variable):
             flags.add("NO_VALID_DATA")
         n_eff = float(weight_sum ** 2 / np.square(weights).sum()) if weight_sum > 0 else 0.0
         null_result = bool(flags & {"NO_VALID_DATA", "LOW_COVERAGE"})
+        if support_collector is not None:
+            # Compute from the EXACT same validity mask as the scientific estimator.
+            # Cell indices are comparable only when the full grid signature agrees.
+            support_collector.append({
+                "entity_id": unit.entity_id,
+                "source_month": str(raster.time.to_period("M")),
+                "grid_signature": (height, width, *tuple(a)[:6], raster.crs.to_wkt()),
+                "valid_cells": {int(idx): float(area) for idx, area in zip(indices[valid], areas[valid])
+                                if area > 0},
+                "total_unit_area": total_area,
+                "spatial_value_usable": not null_result,
+            })
         uncertainty = np.nan
         if sigma is not None:
             flags.add("CONDITIONAL_UNCERTAINTY_ONLY")

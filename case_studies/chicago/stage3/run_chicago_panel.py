@@ -25,6 +25,7 @@ import yaml
 
 from daymet_audit import KEEP_AREAS, VARIABLES, YEARS, digest, inspect_boundaries, inspect_subset
 from geopanel_eo.pipeline import run as run_core
+from geopanel_eo import __version__
 
 TARGET_CRS = CRS.from_epsg(6933)
 
@@ -72,7 +73,7 @@ def source_geometry(dataset):
 
 
 def monthly_native(variable, selection):
-    arrays, times, source_hashes, source_crs, source_transform = [], [], {}, None, None
+    arrays, times, source_hashes, source_crs, source_transform, day_counts = [], [], {}, None, None, {}
     for year in YEARS:
         path = raw_path(variable, year)
         if not path.is_file():
@@ -91,10 +92,11 @@ def monthly_native(variable, selection):
                 chosen = values[dates.month == month]
                 if chosen.size == 0:
                     raise RuntimeError(f"No observations for {variable} {year}-{month:02d}")
+                day_counts[f"{year}-{month:02d}"] = int((dates.month == month).sum())
                 aggregate = np.nansum(chosen, axis=0) if variable == "prcp" else np.nanmean(chosen, axis=0)
                 arrays.append(aggregate.astype("float32"))
                 times.append(np.datetime64(f"{year}-{month:02d}-01"))
-    return np.stack(arrays), np.asarray(times), source_transform, source_crs, source_hashes
+    return np.stack(arrays), np.asarray(times), source_transform, source_crs, source_hashes, day_counts
 
 
 def target_grid(source_transform, source_crs, shape):
@@ -106,7 +108,7 @@ def target_grid(source_transform, source_crs, shape):
 
 
 def prepare_variable(variable, selection, prepared, grid=None):
-    native, times, src_transform, src_crs, hashes = monthly_native(variable, selection)
+    native, times, src_transform, src_crs, hashes, day_counts = monthly_native(variable, selection)
     dst_transform, width, height = grid or target_grid(src_transform, src_crs, native.shape[1:])
     converted = np.full((len(times), height, width), np.nan, dtype="float32")
     for index, source in enumerate(native):
@@ -129,10 +131,16 @@ def prepare_variable(variable, selection, prepared, grid=None):
     output = prepared / f"daymet_{variable}_monthly_epsg6933.nc"
     ds.to_netcdf(output, engine="h5netcdf")
     ds.close()
-    return output, (dst_transform, width, height), hashes
+    return output, (dst_transform, width, height), hashes, day_counts, {
+        "native_crs_wkt": src_crs.to_wkt(),
+        "native_transform": [float(v) for v in src_transform[:6]],
+        "native_shape": [int(native.shape[1]), int(native.shape[2])],
+        "target_transform": [float(v) for v in dst_transform[:6]],
+        "target_shape": [height, width],
+    }
 
 
-def config_document(units, prepared_files, output, frequency):
+def config_document(units, prepared_files, output, frequency, preprocess_manifest):
     sources, variables = [], []
     for variable in VARIABLES:
         sources.append({"source_id": f"daymet_{variable}", "type": "netcdf",
@@ -149,7 +157,7 @@ def config_document(units, prepared_files, output, frequency):
                           "minimum_coverage": 0.95})
     return {"project": {"project_id": f"chicago_daymet_{frequency}",
                          "title": f"Chicago Daymet {frequency} panel", "output_directory": str(output),
-                         "overwrite": False},
+                         "overwrite": False, "preprocessing_manifest": str(preprocess_manifest)},
             "units": {"source": str(units), "entity_id_field": "entity_id",
                       "entity_name_field": "entity_name", "crs": "EPSG:4326",
                       "target_crs": "EPSG:6933", "geometry_action": "fail"},
@@ -217,7 +225,7 @@ def main():
     prepared = run_dir / "prepared"
     prepared.mkdir(parents=True)
     report = {"schema_version": "geopanel-chicago-stage3-1", "status": "RUNNING",
-              "created_utc": stamp[4:], "software_version": "0.1.0"}
+              "created_utc": stamp[4:], "software_version": __version__}
     log_path = run_dir / "stage3_log.txt"
     def emit(message):
         print(message, flush=True)
@@ -227,17 +235,52 @@ def main():
         selection = selection_from_probe()
         units, boundary_audit, subset = selected_units(run_dir)
         prepared_files, input_hashes, shared_grid = {}, {}, None
+        monthly_counts, variable_grid_metadata = None, {}
         for variable in VARIABLES:
             emit(f"[PREPARE] {variable}: daily to monthly and EPSG:6933")
-            path, grid, hashes = prepare_variable(variable, selection, prepared, shared_grid)
+            path, grid, hashes, counts, grid_metadata = prepare_variable(variable, selection, prepared, shared_grid)
+            if monthly_counts is None:
+                monthly_counts = counts
+            elif monthly_counts != counts:
+                raise RuntimeError("Daymet variables contain inconsistent monthly represented-day counts")
+            variable_grid_metadata[variable] = grid_metadata
             shared_grid = grid
             prepared_files[variable] = path
             input_hashes.update(hashes)
+        # Record *executed* preprocessing, before running GeoPanel-EO.
+        # Paths are relative to the manifest location for transferable records.
+        preprocess_manifest = run_dir / "preprocessing_manifest.json"
+        import os as _os
+        preprocess_record = {
+            "schema_version": "geopanel-preprocess-1",
+            "dataset": "Daymet V4 R1, Chicago, executed Stage 3 preparation",
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "raw_source_sha256": {_os.path.relpath(k, run_dir).replace("\\", "/"): v for k, v in input_hashes.items()},
+            "prepared_sha256": {_os.path.relpath(v, run_dir).replace("\\", "/"): digest(v) for v in prepared_files.values()},
+            "represented_day_counts": monthly_counts,
+            "operations": {
+                "input_time_resolution": "Daymet source daily time coordinate",
+                "monthly_temperature_reducer": "numpy.nanmean (arithmetic mean)",
+                "monthly_precipitation_reducer": "numpy.nansum (sum)",
+                "source_nodata": "NaN (array-level aggregation)",
+                "target_nodata": "NaN (rasterio reproject)",
+                "resampling_kernel": "rasterio.warp.Resampling.bilinear",
+                "target_crs": "EPSG:6933",
+                "nominal_resolution_m": 1000,
+                "target_grid": {"width": shared_grid[1], "height": shared_grid[2],
+                                "affine_transform": list(map(float, shared_grid[0][:6]))},
+                "source_and_target_grids_by_variable": variable_grid_metadata,
+                "day_counts_source": "actual daily time coordinates, not inferred calendar",
+                "known_caveat": "NaN-sum may map fully missing precipitation cells to zero; this manifest is not a source-product validation",
+            },
+            "validation_boundary": "Byte identities and executed parameters only; resampling bias and conservation require separate tests",
+        }
+        write_json(preprocess_manifest, preprocess_record)
         manifests = {}
         for frequency in ("monthly", "annual"):
             config_path = run_dir / f"config_{frequency}.yml"
             output = run_dir / f"panel_{frequency}"
-            config_path.write_text(yaml.safe_dump(config_document(units, prepared_files, output, frequency),
+            config_path.write_text(yaml.safe_dump(config_document(units, prepared_files, output, frequency, preprocess_manifest),
                                                   sort_keys=False), encoding="utf-8")
             emit(f"[GEOPANEL-EO] building {frequency} panel")
             manifests[frequency] = run_core(config_path)
@@ -250,6 +293,8 @@ def main():
             mean_absolute_percent_difference=("absolute_percent_difference", "mean")).reset_index()
         summary.to_csv(run_dir / "comparison_summary.csv", index=False, float_format="%.17g")
         report.update({"status": "PASS", "input_sha256": input_hashes,
+                       "preprocessing_manifest_sha256": digest(preprocess_manifest),
+                       "preprocessing_manifest": str(preprocess_manifest),
                        "boundary_audit": boundary_audit,
                        "preprocessing": {"daily_to_monthly": {"tmin": "arithmetic mean",
                                                                "tmax": "arithmetic mean",

@@ -2,4 +2,16 @@ include LICENSE README.md requirements-lock.txt CHANGELOG.md
 recursive-include docs *.md
 recursive-include schemas *.json
 recursive-include scripts *.py
-recursive-include tests *.py
+recursive-include tests *.py *.json
+recursive-include tests_review *.py
+recursive-include review_tools *.py
+recursive-include examples *.yml *.json
+recursive-include publication *.py *.md *.csv *.txt
+recursive-include case_studies *.py *.md *.csv *.json
+prune review_results
+prune review_data
+prune stage3_results
+prune stage4_results
+prune stage5_results
+prune dist
+prune build

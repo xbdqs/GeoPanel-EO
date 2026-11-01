@@ -7,3 +7,13 @@ dist/
 local_build_dist/
 local_validation_results/
 LOCAL_SETUP_LOG.txt
+
+# Local real-data audits and build outputs
+review_data/
+review_results/
+**/stage3_results/
+**/stage4_results/
+**/stage5_results/
+**/data/raw/
+publication/output/
+*.pyc

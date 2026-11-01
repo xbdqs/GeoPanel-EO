@@ -1,0 +1,44 @@
+name: Publish GeoPanel-EO v0.1.1
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    name: Build and publish v0.1.1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require v0.1.1 source version
+        run: python -c "import pathlib,tomllib; p=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); assert p['project']['version']=='0.1.1', p['project']['version']"
+      - name: Build wheel and source distribution
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --sdist
+      - name: Create v0.1.1 tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view v0.1.1 >/dev/null 2>&1; then
+            echo "Release v0.1.1 already exists; not overwriting."
+            exit 0
+          fi
+          gh release create v0.1.1 \
+            dist/geopanel_eo-0.1.1-py3-none-any.whl \
+            dist/geopanel_eo-0.1.1.tar.gz \
+            --target "$GITHUB_SHA" \
+            --title "GeoPanel-EO v0.1.1" \
+            --notes-file docs/RELEASE_NOTES_v0.1.1.md

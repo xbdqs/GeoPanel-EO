@@ -9,6 +9,8 @@ from .errors import GeoPanelError
 def output_temporal_support(variable):
     """Return a stable label for the target-period value actually produced."""
     frequency = variable.temporal_window.frequency
+    if variable.temporal_support == "annual_product":
+        return "annual_product"
     if variable.temporal_reducer == "sum":
         return f"{frequency}_total"
     if variable.temporal_reducer == "mean":
@@ -26,7 +28,12 @@ def combine_flags(values):
     return ";".join(sorted(flags)) or "OK"
 
 
-def aggregate_time(records, variable):
+def aggregate_time(records, variable, temporal=None):
+    """Aggregate pre-validated spatial records using an optional explicit temporal contract.
+
+    Legacy two-argument calls retain equal-month behavior; production should
+    pass the validated Config.temporal object so expected bounds are honored.
+    """
     frame = pd.DataFrame(records)
     dates = pd.to_datetime(frame.source_time)
     frame["month"] = dates.dt.to_period("M")
@@ -38,7 +45,17 @@ def aggregate_time(records, variable):
     frequency = variable.temporal_window.frequency
     pandas_frequency = {"monthly": "M", "quarterly": "Q-DEC", "annual": "Y-DEC"}[frequency]
     frame["period"] = frame.month.map(lambda m: m.asfreq(pandas_frequency))
-    periods = pd.period_range(frame.period.min(), frame.period.max(), freq=pandas_frequency)
+    if temporal is not None and temporal.expected_start_month is not None:
+        start = pd.Period(temporal.expected_start_month, freq="M").asfreq(pandas_frequency)
+        end = pd.Period(temporal.expected_end_month, freq="M").asfreq(pandas_frequency)
+        periods = pd.period_range(start, end, freq=pandas_frequency)
+        frame = frame.loc[frame.period.isin(periods)].copy()
+        if frame.empty:
+            raise GeoPanelError("TIME_BOUNDS_EMPTY", variable.variable_id)
+    else:
+        periods = pd.period_range(frame.period.min(), frame.period.max(), freq=pandas_frequency)
+    weighting = getattr(temporal, "mean_weighting", "equal_month")
+    declared_days = getattr(temporal, "represented_day_counts", {})
     result = []
     for (entity, variable_id), series in frame.groupby(["entity_id", "variable_id"], sort=True):
         for period in periods:
@@ -62,19 +79,35 @@ def aggregate_time(records, variable):
             if observed.empty:
                 flags = combine_flags([flags, "NO_VALID_DATA"])
             value, uncertainty = np.nan, np.nan
+            mean_weighting = weighting if variable.temporal_reducer == "mean" else "not_applicable"
+            represented_day_count = np.nan
             if not partial:
+                weights = np.ones(len(observed), dtype=float)
+                if variable.temporal_reducer == "mean" and weighting == "represented_days":
+                    month_labels = [str(month) for month in observed.month]
+                    missing = [month for month in month_labels if month not in declared_days]
+                    if missing:
+                        raise GeoPanelError("DAY_COUNTS_MISSING",
+                            f"{variable.variable_id}: no upstream represented-day counts for {', '.join(missing)}")
+                    weights = np.array([declared_days[month] for month in month_labels], dtype=float)
+                    represented_day_count = int(weights.sum())
                 if variable.temporal_reducer == "sum":
                     value = float(observed.value.sum())
+                elif variable.temporal_reducer == "mean":
+                    value = float(np.average(observed.value.to_numpy(dtype=float), weights=weights))
                 else:
-                    value = float(observed.value.mean())
+                    value = float(observed.value.iloc[-1])
                 if observed.uncertainty.notna().all():
-                    uncertainty = float(np.sqrt(np.square(observed.uncertainty).sum()))
+                    sigma = observed.uncertainty.to_numpy(dtype=float)
                     if variable.temporal_reducer == "mean":
-                        uncertainty /= len(observed)
+                        uncertainty = float(np.sqrt(np.square(weights * sigma).sum()) / weights.sum())
+                    else:
+                        uncertainty = float(np.sqrt(np.square(sigma).sum()))
             # Conservative target-period diagnostics; full per-slice values are also exported.
             complete_support = len(observed) == expected_count
             row = dict(entity_id=entity, time=str(period), time_code=period.year if frequency == "annual" else period.ordinal,
                 time_frequency=frequency, period_support=output_temporal_support(variable),
+                temporal_mean_weighting=mean_weighting, represented_day_count=represented_day_count,
                 entity_name=str(series.entity_name.iloc[0]), variable_id=variable_id, value=value, qc_flag=flags,
                 uncertainty=uncertainty, source_time_count=len(observed), available_time_count=available_count,
                 valid_time_count=valid_count, expected_time_count=expected_count,
