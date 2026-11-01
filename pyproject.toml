@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geopanel-eo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Auditable conversion of Earth observation rasters to longitudinal panel data"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,6 +32,6 @@ geopanel-eo = "geopanel_eo.cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+testpaths = ["tests", "tests_review"]
+pythonpath = ["src", "."]
 addopts = "-ra"

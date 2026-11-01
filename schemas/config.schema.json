@@ -86,6 +86,18 @@
           "default": false,
           "title": "Overwrite",
           "type": "boolean"
+        },
+        "preprocessing_manifest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preprocessing Manifest"
         }
       },
       "required": [
@@ -227,6 +239,11 @@
           "default": "projected_equal_area",
           "title": "Area Method",
           "type": "string"
+        },
+        "support_overlap_diagnostics": {
+          "default": false,
+          "title": "Support Overlap Diagnostics",
+          "type": "boolean"
         }
       },
       "title": "Spatial",
@@ -258,10 +275,44 @@
           "type": "string"
         },
         "mean_weighting": {
-          "const": "equal_month",
           "default": "equal_month",
+          "enum": [
+            "equal_month",
+            "represented_days"
+          ],
           "title": "Mean Weighting",
           "type": "string"
+        },
+        "represented_day_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Represented Day Counts",
+          "type": "object"
+        },
+        "expected_start_month": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Start Month"
+        },
+        "expected_end_month": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected End Month"
         },
         "incomplete_window": {
           "const": "flag_and_null",
@@ -393,7 +444,8 @@
           "enum": [
             "monthly_mean",
             "monthly_total",
-            "monthly_snapshot"
+            "monthly_snapshot",
+            "annual_product"
           ],
           "title": "Temporal Support",
           "type": "string"

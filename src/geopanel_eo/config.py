@@ -2,6 +2,8 @@
 
 from pathlib import Path
 from typing import Literal
+import re
+import calendar
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -18,6 +20,7 @@ class Project(StrictModel):
     title: str = ""
     output_directory: str = "outputs"
     overwrite: Literal[False] = False
+    preprocessing_manifest: str | None = None
 
 
 class Units(StrictModel):
@@ -78,7 +81,7 @@ class Variable(StrictModel):
     source_variable: str
     semantic_type: Literal["intensive_state", "accumulation_depth", "extensive_total", "categorical_class"]
     unit: str
-    temporal_support: Literal["monthly_mean", "monthly_total", "monthly_snapshot"]
+    temporal_support: Literal["monthly_mean", "monthly_total", "monthly_snapshot", "annual_product"]
     spatial_reducer: Literal["coverage_weighted_mean", "coverage_adjusted_sum", "area_by_class_and_fraction"]
     temporal_reducer: Literal["mean", "sum", "snapshot"]
     temporal_window: Window = Field(default_factory=Window)
@@ -109,7 +112,12 @@ class Variable(StrictModel):
         spatial, temporal, support = rules[self.semantic_type]
         if self.spatial_reducer != spatial or self.temporal_reducer not in temporal:
             raise ValueError(f"SEMANTIC_RULE: invalid reducer for {self.semantic_type}")
-        if self.temporal_support not in support:
+        if self.temporal_support == "annual_product":
+            if (self.temporal_reducer != "snapshot" or self.temporal_window.frequency != "annual"
+                    or len(self.temporal_window.months) != 1
+                    or self.semantic_type not in {"intensive_state", "categorical_class"}):
+                raise ValueError("ANNUAL_PRODUCT_RULE: annual product requires annual single-anchor snapshot of state/class")
+        elif self.temporal_support not in support:
             raise ValueError(f"TEMPORAL_SUPPORT_RULE: invalid temporal_support for {self.semantic_type}")
         if self.valid_range and self.valid_range[0] > self.valid_range[1]:
             raise ValueError("valid_range lower bound exceeds upper bound")
@@ -128,14 +136,42 @@ class Variable(StrictModel):
 class Spatial(StrictModel):
     crs_action: Literal["fail", "reproject_units"] = "fail"
     area_method: Literal["projected_equal_area"] = "projected_equal_area"
+    support_overlap_diagnostics: bool = False
 
 
 class Temporal(StrictModel):
     calendar: Literal["proleptic_gregorian", "gregorian", "standard"] = "proleptic_gregorian"
     timezone: Literal["naive"] = "naive"
     input_frequency: Literal["monthly"] = "monthly"
-    mean_weighting: Literal["equal_month"] = "equal_month"
+    # Equal month remains the legacy default; represented_days uses counts explicitly
+    # supplied from upstream preprocessing, not guessed from the civil calendar.
+    mean_weighting: Literal["equal_month", "represented_days"] = "equal_month"
+    represented_day_counts: dict[str, int] = Field(default_factory=dict)
+    expected_start_month: str | None = None
+    expected_end_month: str | None = None
     incomplete_window: Literal["flag_and_null"] = "flag_and_null"
+
+    @model_validator(mode="after")
+    def check_temporal_contract(self):
+        if (self.expected_start_month is None) != (self.expected_end_month is None):
+            raise ValueError("TIME_BOUNDS_RULE: specify both expected_start_month and expected_end_month")
+        for field in ("expected_start_month", "expected_end_month"):
+            label = getattr(self, field)
+            if label is None:
+                continue
+            if not re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", label):
+                raise ValueError(f"TIME_BOUNDS_RULE: {field} must be YYYY-MM")
+        if self.expected_start_month and self.expected_start_month > self.expected_end_month:
+            raise ValueError("TIME_BOUNDS_RULE: start is after end")
+        if self.mean_weighting == "equal_month" and self.represented_day_counts:
+            raise ValueError("DAY_COUNTS_RULE: day counts require represented_days weighting")
+        for month, count in self.represented_day_counts.items():
+            if not re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", month):
+                raise ValueError(f"DAY_COUNTS_RULE: invalid month key {month!r}")
+            year, number = map(int, month.split("-"))
+            if not (1 <= count <= calendar.monthrange(year, number)[1]):
+                raise ValueError(f"DAY_COUNTS_RULE: invalid represented day count for {month}: {count}")
+        return self
 
 
 class Panel(StrictModel):
@@ -198,6 +234,7 @@ def load_config(path: str | Path) -> Config:
     def resolve(value):
         return str((path.parent / value).resolve()) if value is not None else None
     config.project.output_directory = resolve(config.project.output_directory)
+    config.project.preprocessing_manifest = resolve(config.project.preprocessing_manifest)
     config.units.source = resolve(config.units.source)
     for source in config.sources:
         source.path = resolve(source.path)

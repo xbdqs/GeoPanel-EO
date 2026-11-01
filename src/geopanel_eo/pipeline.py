@@ -19,6 +19,8 @@ from .config import load_config
 from .errors import GeoPanelError
 from .inputs import read_source, read_units, units_in_crs
 from .spatial import spatial_records
+from .support import spatial_support_diagnostics
+from .preprocess_audit import validate_preprocessing_manifest
 from .temporal import aggregate_time, combine_flags, output_temporal_support
 
 
@@ -36,6 +38,8 @@ def sha256(path):
 
 def input_paths(config):
     paths = {Path(config.units.source)}
+    if config.project.preprocessing_manifest is not None:
+        paths.add(Path(config.project.preprocessing_manifest))
     if Path(config.units.source).suffix.lower() == ".shp":
         paths.update(p for p in Path(config.units.source).parent.glob(Path(config.units.source).stem + ".*") if p.suffix.lower() in {".shp", ".shx", ".dbf", ".prj", ".cpg", ".qix"})
     for source in config.sources:
@@ -51,6 +55,7 @@ def build_panel(config):
     units, unit_crs = read_units(config.units)
     sources = {s.source_id: s for s in config.sources}
     all_records, slices, audit = [], [], []
+    support_diagnostics = []
     overlap_pairs = []
     for i, u in enumerate(units):
         for v in units[i + 1:]:
@@ -58,9 +63,10 @@ def build_panel(config):
                 overlap_pairs.append([u.entity_id, v.entity_id])
     for variable in config.variables:
         records = []
+        valid_support = [] if config.spatial.support_overlap_diagnostics else None
         for raster in read_source(sources[variable.source_id], variable):
             projected, reprojected = units_in_crs(units, unit_crs, raster.crs, config)
-            values = spatial_records(raster, projected, variable)
+            values = spatial_records(raster, projected, variable, support_collector=valid_support)
             if reprojected:
                 for row in values:
                     row["qc_flag"] = combine_flags([row["qc_flag"], "CRS_ACTION_RECORDED"])
@@ -74,7 +80,10 @@ def build_panel(config):
                 missing_cell_count=int(np.count_nonzero(~np.isfinite(raster.values))),
                 area_method=config.spatial.area_method))
         slices.extend(records)
-        all_records.extend(aggregate_time(records, variable))
+        aggregated = aggregate_time(records, variable, config.temporal)
+        all_records.extend(aggregated)
+        if valid_support is not None:
+            support_diagnostics.extend(spatial_support_diagnostics(valid_support, variable, aggregated))
     panel = pd.DataFrame(all_records).sort_values(KEY).reset_index(drop=True)
     if panel[KEY].isna().any().any() or panel.duplicated(KEY).any():
         raise GeoPanelError("DUPLICATE_ENTITY_TIME", "Canonical long key is entity_id + time + variable_id")
@@ -97,7 +106,8 @@ def build_panel(config):
     if config.panel.require_balanced and (not balance.structurally_balanced.all() or not shared_grid):
         raise GeoPanelError("PANEL_UNBALANCED", "Variable panels do not share a complete entity-time grid")
     return panel, pd.DataFrame(slices).sort_values(["entity_id", "source_time", "variable_id"]), balance, dict(
-        inputs=audit, overlap_pairs=overlap_pairs, geometry_repair_count=0, shared_entity_time_grid=shared_grid)
+        inputs=audit, overlap_pairs=overlap_pairs, geometry_repair_count=0, shared_entity_time_grid=shared_grid,
+        spatial_support_diagnostics=support_diagnostics)
 
 
 def write_csv(frame, path):
@@ -126,8 +136,13 @@ def codebook(config):
             rows.append(dict(variable_id=variable_id, parent_variable_id=v.variable_id,
                 source_id=v.source_id, source_variable=v.source_variable, semantic_type=v.semantic_type,
                 input_unit=v.unit, output_unit=unit, input_temporal_support=v.temporal_support,
+                timestamp_interpretation="annual_product_year_anchor" if v.temporal_support == "annual_product" else "source_observation_month",
                 output_temporal_support=output_temporal_support(v), spatial_reducer=v.spatial_reducer,
                 temporal_reducer=v.temporal_reducer, frequency=v.temporal_window.frequency,
+                temporal_mean_weighting=config.temporal.mean_weighting if v.temporal_reducer == "mean" else "not_applicable",
+                represented_day_count_source="explicit_upstream_counts" if (v.temporal_reducer == "mean" and config.temporal.mean_weighting == "represented_days") else "not_applicable",
+                expected_start_month=config.temporal.expected_start_month or "inferred_from_source",
+                expected_end_month=config.temporal.expected_end_month or "inferred_from_source",
                 months=",".join(map(str, v.temporal_window.months)), class_code=category,
                 minimum_coverage=v.minimum_coverage, nodata_rule=v.nodata_rule,
                 weight_semantics=v.weight_semantics if v.optional_weight else "none",
@@ -143,9 +158,18 @@ def run(config_path):
         raise GeoPanelError("OUTPUT_EXISTS", f"Choose a new output directory: {output}")
     paths = input_paths(config)
     hashes = {str(path): sha256(path) for path in paths}
+    upstream_audit = None
+    if config.project.preprocessing_manifest is not None:
+        raster_paths = sorted({str(Path(path).resolve()) for source in config.sources for path in
+                               (source.paths if source.paths is not None else [source.path])})
+        upstream_audit = validate_preprocessing_manifest(config.project.preprocessing_manifest, raster_paths)
     panel, slices, balance, audit = build_panel(config)
     if any(sha256(path) != hashes[str(path)] for path in paths):
         raise GeoPanelError("INPUT_CHANGED_DURING_RUN", "An input changed while it was being processed")
+    if upstream_audit is not None:
+        after_audit = validate_preprocessing_manifest(config.project.preprocessing_manifest, raster_paths)
+        if after_audit["manifest_sha256"] != upstream_audit["manifest_sha256"]:
+            raise GeoPanelError("PREPROCESS_MANIFEST_CHANGED", "Preprocessing manifest changed during run")
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}-pending-", dir=output.parent))
     try:
@@ -175,6 +199,8 @@ def run(config_path):
         write_csv(panel.drop(columns=["value"]), staging / "coverage_diagnostics.csv")
         write_csv(slices, staging / "source_diagnostics.csv")
         write_csv(balance, staging / "panel_balance_report.csv")
+        if config.spatial.support_overlap_diagnostics:
+            write_csv(pd.DataFrame(audit["spatial_support_diagnostics"]), staging / "spatial_support_overlap.csv")
         warnings = sorted({flag for flags in panel.qc_flag for flag in flags.split(";") if flag != "OK"})
         if audit["overlap_pairs"]:
             warnings.append("UNITS_OVERLAP")
@@ -186,21 +212,30 @@ def run(config_path):
                 f"<h1>{html.escape(config.project.title or config.project.project_id)}</h1>"
                 f"<p>Records: {len(panel)}; entities: {panel.entity_id.nunique()}; time labels: {panel.time.nunique()}; derived variables: {panel.variable_id.nunique()}; missing values: {panel.value.isna().sum()}.</p>"
                 f"<p>QC: {html.escape(', '.join(warnings) or 'OK')}. Area unit: m²; the coverage denominator is the complete analysis-unit area.</p>"
-                "<p>Target-period diagnostics use the minimum monthly support; a missing month contributes zero support. Means use equal monthly weights, incomplete windows are set to null, and class fractions use valid classified area as their denominator.</p>"
+                f"<p>Target-period support diagnostics use the minimum monthly support; missing months contribute zero support. Mean weighting: {html.escape(config.temporal.mean_weighting)}; incomplete windows are set to null. Class fractions use the valid classified area as denominator.</p>"
                 "<p>Input uncertainty is propagated only under independence of pixel and monthly errors and must not be interpreted as total measurement uncertainty.</p>" + balance.to_html(index=False) + "</html>", encoding="utf-8")
         # Re-read all auxiliary tabular/config/report artifacts before recording their hashes.
         for path in staging.glob("*.csv"):
             pd.read_csv(path)
         yaml.safe_load((staging / "resolved_config.yml").read_text(encoding="utf-8"))
         output_hashes = {p.name: sha256(p) for p in sorted(staging.iterdir())}
-        manifest = dict(schema_version="s1-2-unit-temporal", software_version=__version__,
+        manifest = dict(schema_version="s1-3-explicit-time-contract", software_version=__version__,
+            preprocessing_audit=upstream_audit,
+            temporal_mean_weighting=config.temporal.mean_weighting,
+            expected_start_month=config.temporal.expected_start_month,
+            expected_end_month=config.temporal.expected_end_month,
+            support_overlap_diagnostics_enabled=config.spatial.support_overlap_diagnostics,
+            support_overlap_status_counts=(pd.Series([r["support_status"] for r in audit["spatial_support_diagnostics"]]).value_counts().to_dict()
+                                           if config.spatial.support_overlap_diagnostics else {}),
             started_at_utc=datetime.now(timezone.utc).isoformat(), python=platform.python_version(), platform=platform.platform(),
             dependencies={name: importlib.metadata.version(name) for name in DEPENDENCIES},
             input_sha256=hashes, config_sha256=sha256(config_path), resolved_config_sha256=output_hashes["resolved_config.yml"],
             output_sha256=output_hashes, scientific_result_sha256=output_hashes["panel_long.csv"],
             row_count=len(panel), entity_count=panel.entity_id.nunique(), time_count=panel.time.nunique(),
             variable_count=panel.variable_id.nunique(), null_value_count=int(panel.value.isna().sum()),
-            dropped_row_count=0, warnings=warnings, audit=audit, uncertainty_assumption=config.uncertainty.assumption,
+            dropped_row_count=0, warnings=warnings,
+            audit={k: v for k, v in audit.items() if k != "spatial_support_diagnostics"},
+            uncertainty_assumption=config.uncertainty.assumption,
             long_key=KEY, wide_key=["entity_id", "time"], roundtrip_verified=True)
         (staging / "run_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
         json.loads((staging / "run_manifest.json").read_text(encoding="utf-8"))
