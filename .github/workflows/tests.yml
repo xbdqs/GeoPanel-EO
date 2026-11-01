@@ -10,8 +10,13 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    name: "Python 3.12 / ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,3 +37,13 @@ jobs:
         run: python -m pytest tests -q -W error::RuntimeWarning
       - name: Run reviewer synthetic and contract tests
         run: python -m pytest tests_review -q
+      - name: Build Wheel and source distribution
+        run: python -m build --wheel --sdist
+      - name: Install built Wheel into a clean environment and test both CLI entry points
+        run: python scripts/ci_verify_distribution.py
+      - name: Archive release candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: geopanel-eo-0.1.1-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
